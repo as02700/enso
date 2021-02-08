@@ -1277,7 +1277,7 @@ lazy val `std-bits` = project
       StdBits
         .copyDependencies(
           `std-lib-polyglot-root`,
-          "std-bits.jar",
+          Some("std-bits.jar"),
           ignoreScalaLibrary = true
         )
         .value
@@ -1299,7 +1299,7 @@ lazy val table = project
       StdBits
         .copyDependencies(
           `table-polyglot-root`,
-          "table.jar",
+          Some("table.jar"),
           ignoreScalaLibrary = true
         )
         .value
@@ -1311,15 +1311,13 @@ lazy val database = project
   .in(file("database"))
   .settings(
     autoScalaLibrary := false,
-    Compile / packageBin / artifactPath :=
-      `database-polyglot-root` / "database.jar",
     libraryDependencies ++= Seq(),
     Compile / packageBin := Def.task {
       val result = (Compile / packageBin).value
       StdBits
         .copyDependencies(
           `database-polyglot-root`,
-          "database.jar",
+          None,
           ignoreScalaLibrary = true
         )
         .value
