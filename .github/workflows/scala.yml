@@ -222,6 +222,7 @@ jobs:
         run: |
           $ENGINE_DIST_DIR/bin/enso --run test/Tests
           $ENGINE_DIST_DIR/bin/enso --run test/Table_Tests
+          $ENGINE_DIST_DIR/bin/enso --run test/Database_Tests
           $ENGINE_DIST_DIR/bin/enso --run test/Geo_Tests
 
       - name: Test Engine Distribution (Windows)
@@ -230,6 +231,7 @@ jobs:
         run: |
           $ENGINE_DIST_DIR/bin/enso.bat --run test/Tests
           $ENGINE_DIST_DIR/bin/enso.bat --run test/Table_Tests
+          $ENGINE_DIST_DIR/bin/enso.bat --run test/Database_Tests
           $ENGINE_DIST_DIR/bin/enso.bat --run test/Geo_Tests
 
       # Publish
