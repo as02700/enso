@@ -248,7 +248,8 @@ type Table
 
     to_dataframe : (Integer | Nothing) -> Table.Table
     to_dataframe limit=Nothing =
-        _ = limit
+        # TODO [RW] limit
+        sql = this.to_sql
         Error.throw "TODO materialization"
 
     ## Returns an SQL statement that will be used for materializing this table.
