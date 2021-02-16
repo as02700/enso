@@ -7,6 +7,10 @@ type FakeTestConnection
     fetch_column_names name =
         this.tables.get name
 
+    prepare_statement : Text -> Vector Any -> PreparedStatement
+    prepare_statement template holes=[] =
+        Error.throw "FakeTestConnection cannot be used to run actual queries."
+
 ## PRIVATE
 new : Map Text (Vector Text) -> Text -> FakeTestConnection
 new tables dialect = FakeTestConnection tables dialect
