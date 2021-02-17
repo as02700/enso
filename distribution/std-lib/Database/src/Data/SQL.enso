@@ -1,12 +1,22 @@
 from Base import all
 import Database.Data.Internal.VectorBuilder
+polyglot java import java.sql.Types
+
+type SqlType
+    type SqlType typeid
+
+    boolean : SqlType
+    boolean = SqlType Types.BOOLEAN
+
+    integer : SqlType
+    integer = SqlType Types.INTEGER
 
 type SqlFragment
     # type SqlCodePart (code : Text)
     type SqlCodePart code
 
-    # type SqlInterpolation (object : Any)
-    type SqlInterpolation object
+    # type SqlInterpolation (sql_type : SqlType) (object : Any)
+    type SqlInterpolation sql_type object
 
 type Statement
     # type Statement (internal_fragments : Vector SqlFragment)
@@ -29,7 +39,7 @@ type Statement
         strings = this.internal_fragments . map <| case _ of
             SqlCodePart code -> code
             # TODO at some point we may try more sophisticated serialization based on data type
-            SqlInterpolation obj -> case obj of
+            SqlInterpolation _ obj -> case obj of
                 Number -> obj.to_text
                 _ -> "'" + obj.to_text.replace "'" "''" + "'"
         strings.join ""
@@ -40,10 +50,10 @@ type Statement
     prepare =
         to_code fragment = case fragment of
             SqlCodePart code -> code
-            SqlInterpolation _ -> "?"
+            SqlInterpolation _ _ -> "?"
         to_subst fragment = case fragment of
             SqlCodePart _ -> []
-            SqlInterpolation obj -> [obj]
+            SqlInterpolation typ obj -> [[obj, typ]]
         sql = this.fragments.map to_code . join ""
         substitutions = this.fragments.flat_map to_subst
         [sql, substitutions]
@@ -52,8 +62,8 @@ type Statement
     to_json =
         jsonify fragment = case fragment of
             SqlCodePart code -> Json.from_pairs [["sql_code", code]]
-            SqlInterpolation obj ->
-                inner = obj.to_json
+            SqlInterpolation (SqlType typeid) obj ->
+                inner = Json.from_pairs [["value", obj.to_json], ["typeid", typeid]]
                 Json.from_pairs [["sql_interpolation", inner]]
         fragments = Json.Array (this.internal_fragments.map jsonify)
         Json.from_pairs [["query", fragments]]
@@ -98,8 +108,8 @@ code text =
     vec = if text.is_empty then [] else [SqlCodePart text]
     Builder (VectorBuilder.from_vector vec)
 
-interpolation : Any -> Builder
-interpolation object = Builder (VectorBuilder.from_vector [SqlInterpolation object])
+interpolation : SqlType -> Any -> Builder
+interpolation sql_type object = Builder (VectorBuilder.from_vector [SqlInterpolation sql_type object])
 
 join : Builder | Text -> Vector Builder -> Builder
 join separator statements =
@@ -121,7 +131,7 @@ optimize_fragments fragments =
                     Nothing -> SqlCodePart code
                     SqlCodePart other -> SqlCodePart other+code
                 State.put SqlCodePart new_part
-            SqlInterpolation _ ->
+            SqlInterpolation _ _ ->
                 case last_part of
                     Nothing -> Nothing
                     SqlCodePart _ ->

@@ -4,8 +4,8 @@ type Expression
     # type Column (origin : Text) (name : Text)
     type Column origin name
 
-    # type Constant (value : Any)
-    type Constant value
+    # type Constant (sql_type : SQL.SqlType) (value : Any)
+    type Constant sql_type value
 
     # type Operation (kind : Text) (expressions : Vector Expression)
     type Operation kind expressions
@@ -64,15 +64,15 @@ make_ctx_from : Text -> Context
 make_ctx_from table_name =
     Context (FromTable table_name table_name) [] [] [] []
 
-make_constant : Any -> Expression
-make_constant x =
+make_constant : SQL.SqlType -> Any -> Expression
+make_constant sql_type x =
     # TODO [RW] may add some sanitization, like checking if the value type is supported
-    Constant x
+    Constant sql_type x
 
 substitute_origin : Text -> Text -> Expression
 substitute_origin old_origin new_origin expr = case expr of
     Column origin name ->
         if origin == old_origin then Column new_origin name else expr
-    Constant _ -> expr
+    Constant _ _ -> expr
     Operation kind exprs ->
         Operation kind (exprs.map (here.substitute_origin old_origin new_origin))

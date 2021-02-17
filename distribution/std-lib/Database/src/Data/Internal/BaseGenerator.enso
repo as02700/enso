@@ -1,6 +1,7 @@
 from Base import all
 import Database.Data.SQL
 import Database.Data.Internal.IR
+from Database.Data.SQL import SqlType
 
 type InternalDialect
     # type InternalDialect (operation_map : Map Text (Vector SQL.Builder -> SQL.Builder))
@@ -66,7 +67,7 @@ base_dialect =
 generate_expression : InternalDialect -> IR.Expression -> SQL.Builder
 generate_expression dialect expr = case expr of
     IR.Column origin name -> SQL.code origin+"."+name
-    IR.Constant value -> SQL.interpolation value
+    IR.Constant sql_type value -> SQL.interpolation sql_type value
     IR.Operation kind arguments ->
         op = dialect.operation_map.get_or_else kind (Error.throw "Operation "+op+" is not supported.")
         parsed_args = arguments.map (here.generate_expression dialect)

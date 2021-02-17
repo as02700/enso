@@ -1,12 +1,14 @@
 from Base import all
 import Database.Data.Internal.Helpers
 import Database.Data.Internal.IR
+from Database.Data.SQL import SqlType
 import Database.Data.Table
 
 type Column
     # type Column (name : Text) (connection : Connection)
-    #             (expression : IR.Expression) (context : IR.Context)
-    type Column name connection expression context
+    #             (sql_type : SqlType) (expression : IR.Expression)
+    #             (context : IR.Context)
+    type Column name connection sql_type expression context
 
     ## Converts this column to JSON.
     to_json : Json
@@ -15,7 +17,7 @@ type Column
     ## Converts this column into a single-column table.
     to_table : Table.Table
     to_table =
-        cols = [[this.name, this.expression]]
+        cols = [Table.InternalColumn this.name this.sql_type this.expression]
         Table.Table this.name this.connection cols this.context
 
     ## Returns a vector containing all the elements in this column.
@@ -26,67 +28,77 @@ type Column
     to_sql : SQL.Statement
     to_sql = this.to_table.to_sql
 
-    make_binary_op : Text -> Text -> (Column | Any) -> Column
-    make_binary_op op_kind operand =
+    ## PRIVATE
+       Creates a binary operation with given kind and operand.
+       If not specified, the `new_type` is the same as the current one.
+       `operand_type` is only relevant if the operand is not a column, it
+       defaults to the current type if not provided.
+    make_binary_op : Text -> Text -> (Column | Any) -> (SqlType | Nothing) -> (SqlType | Nothing) -> Column
+    make_binary_op op_kind operand new_type=Nothing operand_type=Nothing =
+        actual_new_type = if new_type.is_nothing then this.sql_type else new_type
         case operand of
-            Column _ _ other_expr _ ->
+            Column _ _ _ other_expr _ ->
                 case Helpers.check_integrity this operand of
                     False ->
                         Error.throw "Cannot compare columns coming from different contexts. Only columns of a single table can be compared."
                     True ->
                         new_expr = IR.Operation op_kind [this.expression, other_expr]
-                        Column this.name this.connection new_expr this.context
+                        Column this.name this.connection actual_new_type new_expr this.context
             _ ->
-                other = IR.make_constant operand
+                actual_operand_type = if operand_type.is_nothing then this.sql_type else operand_type
+                other = IR.make_constant actual_operand_type operand
                 new_expr = IR.Operation op_kind [this.expression, other]
-                Column this.name this.connection new_expr this.context
+                Column this.name this.connection actual_new_type new_expr this.context
 
-    make_unary_op : Text -> Text -> Column
-    make_unary_op op_kind =
+    ## PRIVATE
+       Creates an unary operation.
+    make_unary_op : Text -> Text -> (SqlType | Nothing) -> Column
+    make_unary_op op_kind new_type=Nothing =
+        actual_new_type = if new_type.is_nothing then this.sql_type else new_type
         new_expr = IR.Operation op_kind [this.expression]
-        Column this.name this.connection new_expr this.context
+        Column this.name this.connection actual_new_type new_expr this.context
 
     ## Element-wise equality comparison. Returns a column with results of
        comparing this column's elements against `other`.
        If `other` is a column, the comparison is performed pairwise between
        corresponding elements of `this` and `other`.
     == : Column | Any -> Column
-    == other = this.make_binary_op "=" other
+    == other = this.make_binary_op "=" other new_type=SqlType.boolean
 
     ## Element-wise non-equality comparison. Returns a column with results of
        comparing this column's elements against `other`.
        If `other` is a column, the comparison is performed pairwise between
        corresponding elements of `this` and `other`.
     != : Column | Any -> Column
-    != other = this.make_binary_op "!=" other
+    != other = this.make_binary_op "!=" other new_type=SqlType.boolean
 
     ## Element-wise order comparison. Returns a column with results of
        comparing this column's elements against `other`.
        If `other` is a column, the comparison is performed pairwise between
        corresponding elements of `this` and `other`.
     >= : Column | Any -> Column
-    >= other = this.make_binary_op ">=" other
+    >= other = this.make_binary_op ">=" other new_type=SqlType.boolean
 
     ## Element-wise order comparison. Returns a column with results of
        comparing this column's elements against `other`.
        If `other` is a column, the comparison is performed pairwise between
        corresponding elements of `this` and `other`.
     <= : Column | Any -> Column
-    <= other = this.make_binary_op "<=" other
+    <= other = this.make_binary_op "<=" other new_type=SqlType.boolean
 
     ## Element-wise order comparison. Returns a column with results of
        comparing this column's elements against `other`.
        If `other` is a column, the comparison is performed pairwise between
        corresponding elements of `this` and `other`.
     > : Column | Any -> Column
-    > other = this.make_binary_op ">" other
+    > other = this.make_binary_op ">" other new_type=SqlType.boolean
 
     ## Element-wise order comparison. Returns a column with results of
        comparing this column's elements against `other`.
        If `other` is a column, the comparison is performed pairwise between
        corresponding elements of `this` and `other`.
     < : Column | Any -> Column
-    < other = this.make_binary_op "<" other
+    < other = this.make_binary_op "<" other new_type=SqlType.boolean
 
     ## Element-wise addition. Returns a column containing the result
        of adding `other` to each element of `this`.
@@ -137,7 +149,7 @@ type Column
     ## Returns a column of booleans, with `True` items at the positions where
        this column contains a `Nothing`.
     is_missing : Column
-    is_missing = this.make_unary_op "ISNULL"
+    is_missing = this.make_unary_op "ISNULL" new_type=SqlType.boolean
 
     ## Returns a new column where missing values have been replaced with the
        provided default.
@@ -160,7 +172,7 @@ type Column
             True ->
                 new_filters = this.context.where_filters + [filter.expression]
                 new_ctx = this.context.set_where_filters new_filters
-                Column this.name this.connection this.expression new_ctx
+                Column this.name this.connection this.sql_type this.expression new_ctx
 
     ## Returns a new column without rows that had missing values.
     drop_missing : Any -> Column
@@ -168,7 +180,7 @@ type Column
 
     rename : Text -> Column
     rename new_name = case Helpers.ensure_name_is_sane new_name of
-        True -> Column new_name this.connection this.expression this.context
+        True -> Column new_name this.connection this.sql_type this.expression this.context
 
     ## Returns the length of this column.
     length : Integer
@@ -186,26 +198,27 @@ type Column
        If `other` is a column, the operation is performed pairwise between
        corresponding elements of `this` and `other`.
     starts_with : Column | Text -> Column
-    starts_with other = this.make_binary_op "starts_with" other
+    starts_with other = this.make_binary_op "starts_with" other new_type=SqlType.boolean
 
     ## Checks for each element of the column if it ends with `other`.
        If `other` is a column, the operation is performed pairwise between
        corresponding elements of `this` and `other`.
     ends_with : Column | Text -> Column
-    ends_with other = this.make_binary_op "ends_with" other
+    ends_with other = this.make_binary_op "ends_with" other new_type=SqlType.boolean
 
     ## Checks for each element of the column if it contains `other`.
        If `other` is a column, the operation is performed pairwise between
        corresponding elements of `this` and `other`.
     contains : Column | Text -> Column
-    contains other = this.make_binary_op "contains" other
+    contains other = this.make_binary_op "contains" other new_type=SqlType.boolean
 
 ## Wraps a column grouped by its index. Allows performing aggregation operations
    on the contained values.
 type Aggregate_Column
     # type Aggregate_Column (name : Text) (connection : Connection)
-    #                       (expression : IR.Expression) (context : IR.Context)
-    type Aggregate_Column name connection expression context
+    #                       (sql_type : SqlType) (expression : IR.Expression)
+    #                       (context : IR.Context)
+    type Aggregate_Column name connection sql_type expression context
 
     ## Sums the values in each group.
 
@@ -241,7 +254,7 @@ type Aggregate_Column
                         name to generate the resulting column name.
     count : Text -> Column
     count name_suffix='_count' =
-        this.make_aggregate "COUNT" name_suffix
+        this.make_aggregate "COUNT" name_suffix new_type=SqlType.integer
 
     ## Computes the mean of non-missing elements in each group.
 
@@ -267,8 +280,9 @@ type Aggregate_Column
         Error.throw "TODO materialization"
 
     ## PRIVATE
-    make_aggregate operation name_suffix =
+    make_aggregate operation name_suffix new_type=Nothing =
         new_name = this.name + name_suffix
+        actual_new_type = if new_type.is_nothing then this.sql_type else new_type
         expr = IR.Operation operation [this.expression]
         case Helpers.ensure_name_is_sane new_name of
-                True -> Column new_name this.connection expr this.context
+                True -> Column new_name this.connection actual_new_type expr this.context

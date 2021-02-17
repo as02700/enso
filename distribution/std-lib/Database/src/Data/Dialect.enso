@@ -38,7 +38,7 @@ postgresql =
                 Error.throw ("Invalid amount of arguments for operation contains")
     my_mappings = [["starts_with", starts_with], ["contains", contains], ["ends_with", ends_with]]
     dialect = BaseGenerator.base_dialect . extend_with my_mappings
-    Dialect "PostgreSQL" (query -> BaseGenerator.generate_query dialect query . build)
+    Dialect "postgresql" (query -> BaseGenerator.generate_query dialect query . build)
 
 sqlite : Dialect
 sqlite =
@@ -71,4 +71,7 @@ sqlite =
                 Error.throw ("Invalid amount of arguments for operation contains")
     my_mappings = [["starts_with", starts_with], ["contains", contains], ["ends_with", ends_with]]
     dialect = BaseGenerator.base_dialect . extend_with my_mappings
-    Dialect "SQLite" (query -> BaseGenerator.generate_query dialect query . build)
+    Dialect "sqlite" (query -> BaseGenerator.generate_query dialect query . build)
+
+supported_dialects : Vector Dialect
+supported_dialects = [here.postgresql, here.sqlite]
