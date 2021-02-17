@@ -21,7 +21,7 @@ type Table
          - format_terminal: whether ANSI-terminal formatting should be used
     display : Integer -> Boolean -> Text
     display show_rows=10 format_terminal=False =
-        this.to_dataframe.display show_rows format_terminal
+        (this.to_dataframe limit=show_rows).display show_rows format_terminal
 
     ## Prints an ASCII-art table with this data to the standard output.
 
@@ -253,7 +253,7 @@ type Table
     to_dataframe limit=Nothing =
         # TODO [RW] limit
         sql = this.to_sql
-        Error.throw "TODO materialization"
+        this.connection.execute_query sql
 
     ## Returns an SQL statement that will be used for materializing this table.
     to_sql : SQL.Statement
